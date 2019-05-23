@@ -45,11 +45,7 @@ def _compilation_db_json(compilation_db):
     return ",\n ".join(entries)
 
 def _is_cpp_target(srcs):
-    for src in srcs:
-        for extension in _cpp_extensions:
-            if src.extension == extension:
-                return True
-    return False
+    return any([src.extension in _cpp_extensions for src in srcs])
 
 def _sources(target, ctx):
     srcs = []
@@ -86,6 +82,22 @@ def get_compile_flags(dep):
         options.append("-iquote {}".format(quote_include))
 
     return options
+
+def _get_stripped_includes(target, ctx):
+    include_path = []
+
+    prefix = getattr(ctx.rule.attr, "strip_include_prefix", None)
+    if prefix == None:
+        return []
+
+    pkg = target.label.package
+    if pkg:
+        include_path.append(pkg)
+
+    if prefix:
+        include_path.append(prefix)
+        return ["-I {}".format("/".join(include_path))]
+    return []
 
 def _compilation_database_aspect_impl(target, ctx):
     # Write the compile commands for this target to a file, and return
@@ -151,6 +163,7 @@ def _compilation_database_aspect_impl(target, ctx):
 
     compile_flags = (compiler_options +
                      get_compile_flags(target) +
+                     _get_stripped_includes(target, ctx) +
                      (ctx.rule.attr.copts if "copts" in dir(ctx.rule.attr) else []))
 
     # system built-in directories (helpful for macOS).
